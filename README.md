@@ -14,6 +14,7 @@ The fork at [firezone/boringtun](https://github.com/firezone/boringtun) is now d
 The `sanstun` project combines our experience of operating WireGuard in production in a sans-IO setting.
 It features a re-designed API and internals that are tuned for maximizing throughput whilst making it easy and safe to use.
 
+- `#![no_std]`, requiring only `alloc` (so your binary must provide a global allocator) and atomic pointers
 - Fully sans-IO, including time and RNG seeds
 - No internal buffering
 - No locks or atomic counters in the protocol state
@@ -52,7 +53,7 @@ With great power comes great responsibility.
 
 ### Time
 
-The time passed in needs to be monotonically increasing, otherwise other peers might reject handshakes as replays.
+Because `sanstun` is `no_std`, it does not read a clock. Pass the elapsed time of your monotonic clock as a `sanstun::Instant`, constructed with `Instant::from_duration_since_epoch`. The time passed in needs to be monotonically increasing, otherwise other peers might reject handshakes as replays.
 
 ## Security
 

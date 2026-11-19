@@ -1,6 +1,8 @@
-use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr};
-use std::time::{Duration, Instant};
+use alloc::collections::BTreeMap;
+use core::net::{IpAddr, Ipv4Addr};
+use core::time::Duration;
+
+use crate::Instant;
 
 const DEFAULT_HANDSHAKE_LIMIT: u64 = 100;
 
@@ -25,7 +27,7 @@ pub(crate) struct RateLimiter {
     /// Messages counted since `window_start`.
     count: u64,
     window_start: Instant,
-    buckets: HashMap<Source, Bucket>,
+    buckets: BTreeMap<Source, Bucket>,
     last_gc: Instant,
 }
 
@@ -35,7 +37,7 @@ impl RateLimiter {
             limit: DEFAULT_HANDSHAKE_LIMIT,
             count: 0,
             window_start: now,
-            buckets: HashMap::new(),
+            buckets: BTreeMap::new(),
             last_gc: now,
         }
     }
@@ -90,15 +92,13 @@ impl RateLimiter {
             return;
         }
 
-        for _ in self
-            .buckets
-            .extract_if(|_, bucket| now.duration_since(bucket.last_seen) >= IDLE_TIMEOUT)
-        {}
+        self.buckets
+            .retain(|_, bucket| now.duration_since(bucket.last_seen) < IDLE_TIMEOUT);
         self.last_gc = now;
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Source {
     V4(Ipv4Addr),
     /// The upper 64 bits of the address.
@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn full_table_refuses_new_sources_until_idle_ones_are_dropped() {
-        let start = Instant::now();
+        let start = Instant::default();
         let mut limiter = RateLimiter::new(start);
         for i in 0..MAX_SOURCES as u32 {
             assert!(limiter.allow(Ipv4Addr::from_bits(i).into(), start));
@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn ipv4_mapped_ipv6_sources_are_limited_per_ipv4_address() {
-        let now = Instant::now();
+        let now = Instant::default();
         let mut limiter = RateLimiter::new(now);
         let mapped = |ip: Ipv4Addr| IpAddr::V6(ip.to_ipv6_mapped());
 

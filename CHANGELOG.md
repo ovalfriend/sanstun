@@ -7,6 +7,8 @@ Releases follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** The crate is now `#![no_std]` and only depends on `alloc`. Time is passed as `sanstun::Instant`, constructed from a monotonic `Duration` since a caller-chosen epoch, instead of `std::time::Instant`.
+- Replaced `ring`'s ChaCha20-Poly1305 with the pure-Rust `chacha20poly1305` crate, so the crate builds for bare-metal `no_std` targets.
 - **Breaking:** Data messages are encrypted, decrypted and committed in batches, which sets up the session and AEAD key once per batch instead of once per message (#129).
 - **Breaking:** A tunnel rejects handshake initiations received before it was created with the new `Error::InitiationPredatesTunnel`, because the replay check could not run for them (#152).
 

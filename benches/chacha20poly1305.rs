@@ -1,22 +1,19 @@
+use chacha20poly1305::aead::AeadInOut;
+use chacha20poly1305::{ChaCha20Poly1305, KeyInit, Nonce};
 use criterion::{BenchmarkId, Criterion, Throughput};
 use rand::Rng;
-use ring::aead::{Aad, CHACHA20_POLY1305, LessSafeKey, Nonce, UnboundKey};
 
-fn chacha20poly1305_ring(key_bytes: &[u8], buf: &mut [u8]) {
+fn chacha20poly1305(key_bytes: &[u8], buf: &mut [u8]) {
     let len = buf.len();
     let n = len - 16;
 
-    let key = LessSafeKey::new(UnboundKey::new(&CHACHA20_POLY1305, key_bytes).unwrap());
+    let key = ChaCha20Poly1305::new_from_slice(key_bytes).unwrap();
 
     let tag = key
-        .seal_in_place_separate_tag(
-            Nonce::assume_unique_for_key([0u8; 12]),
-            Aad::from(&[]),
-            &mut buf[..n],
-        )
+        .encrypt_inout_detached(&Nonce::from([0u8; 12]), &[], (&mut buf[..n]).into())
         .unwrap();
 
-    buf[n..].copy_from_slice(tag.as_ref())
+    buf[n..].copy_from_slice(&tag)
 }
 
 fn bench_chacha20poly1305(c: &mut Criterion) {
@@ -27,21 +24,17 @@ fn bench_chacha20poly1305(c: &mut Criterion) {
     for size in [128, 192, 1400, 8192] {
         group.throughput(Throughput::Bytes(size as u64));
 
-        group.bench_with_input(
-            BenchmarkId::new("chacha20poly1305_ring", size),
-            &size,
-            |b, i| {
-                let mut key = [0; 32];
-                let mut buf = vec![0; i + 16];
+        group.bench_with_input(BenchmarkId::new("chacha20poly1305", size), &size, |b, i| {
+            let mut key = [0; 32];
+            let mut buf = vec![0; i + 16];
 
-                let mut rng = rand::rng();
+            let mut rng = rand::rng();
 
-                rng.fill_bytes(&mut key);
-                rng.fill_bytes(&mut buf);
+            rng.fill_bytes(&mut key);
+            rng.fill_bytes(&mut buf);
 
-                b.iter(|| chacha20poly1305_ring(&key, &mut buf));
-            },
-        );
+            b.iter(|| chacha20poly1305(&key, &mut buf));
+        });
     }
 
     group.finish();

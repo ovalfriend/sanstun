@@ -1,9 +1,12 @@
+use alloc::borrow::ToOwned;
+
 use crate::PublicKey;
 use crate::errors::Error;
 use blake2::digest::consts::U16;
 use blake2::digest::{FixedOutput, KeyInit};
 use blake2::{Blake2s256, Blake2sMac, Digest};
-use ring::aead::{Aad, CHACHA20_POLY1305, LessSafeKey, Nonce, UnboundKey};
+use chacha20poly1305::aead::AeadInOut;
+use chacha20poly1305::{ChaCha20Poly1305, Nonce, Tag};
 use x25519_dalek::SharedSecret;
 use zeroize::Zeroizing;
 
@@ -75,19 +78,19 @@ fn aead_chacha20_seal_inner(
     data: &[u8],
     aad: &[u8],
 ) {
-    let key = LessSafeKey::new(UnboundKey::new(&CHACHA20_POLY1305, key).unwrap());
+    let cipher = ChaCha20Poly1305::new_from_slice(key).unwrap();
 
     ciphertext[..data.len()].copy_from_slice(data);
 
-    let tag = key
-        .seal_in_place_separate_tag(
-            Nonce::assume_unique_for_key(nonce),
-            Aad::from(aad),
-            &mut ciphertext[..data.len()],
+    let tag = cipher
+        .encrypt_inout_detached(
+            &Nonce::from(nonce),
+            aad,
+            (&mut ciphertext[..data.len()]).into(),
         )
         .unwrap();
 
-    ciphertext[data.len()..].copy_from_slice(tag.as_ref());
+    ciphertext[data.len()..].copy_from_slice(&tag);
 }
 
 #[inline]
@@ -111,18 +114,21 @@ fn aead_chacha20_open_inner(
     nonce: [u8; 12],
     data: &[u8],
     aad: &[u8],
-) -> Result<(), ring::error::Unspecified> {
-    let key = LessSafeKey::new(UnboundKey::new(&CHACHA20_POLY1305, key).unwrap());
-
+) -> Result<(), chacha20poly1305::Error> {
+    let cipher = ChaCha20Poly1305::new_from_slice(key).unwrap();
+    let Some((data, tag)) = data.split_last_chunk::<16>() else {
+        return Err(chacha20poly1305::Error);
+    };
     let mut inner_buffer = data.to_owned();
 
-    let plaintext = key.open_in_place(
-        Nonce::assume_unique_for_key(nonce),
-        Aad::from(aad),
-        &mut inner_buffer,
+    cipher.decrypt_inout_detached(
+        &Nonce::from(nonce),
+        aad,
+        (&mut inner_buffer[..]).into(),
+        &Tag::from(*tag),
     )?;
 
-    buffer.copy_from_slice(plaintext);
+    buffer.copy_from_slice(&inner_buffer);
 
     Ok(())
 }
@@ -229,6 +235,8 @@ mod x25519 {
 mod tests {
     use super::*;
     use crate::StaticSecret;
+    use alloc::vec;
+    use std::eprintln;
 
     #[test]
     fn dh_rejects_low_order_points() {
@@ -338,8 +346,8 @@ mod tests {
         let aad = [
             0x50, 0x51, 0x52, 0x53, 0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
         ];
-        let key = std::array::from_fn(|i| 0x80 + i as u8);
-        let nonce = std::array::from_fn(|i| 0x40 + i as u8);
+        let key = core::array::from_fn(|i| 0x80 + i as u8);
+        let nonce = core::array::from_fn(|i| 0x40 + i as u8);
         let mut sealed = vec![0; plaintext.len() + 16];
 
         xaead_seal(&mut sealed, &key, &nonce, plaintext, &aad);

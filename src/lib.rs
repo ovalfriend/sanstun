@@ -1,3 +1,5 @@
+#![no_std]
+
 //! A sans-IO implementation of the WireGuard protocol.
 //!
 //! # Example
@@ -7,19 +9,20 @@
 //! timers with [`Tunnel::poll_timeout`] and [`Tunnel::handle_timeout`].
 //!
 //! ```
-//! use std::num::NonZeroUsize;
-//! use std::time::{Instant, SystemTime, UNIX_EPOCH};
+//! use core::num::NonZeroUsize;
+//! use core::time::Duration;
 //!
-//! use sanstun::{Committed, Interface, Received, ReceivedMessage, TunnelConfig};
+//! use sanstun::{Committed, Instant, Interface, Received, ReceivedMessage, TunnelConfig};
 //! use zeroize::Zeroizing;
 //!
-//! let now = Instant::now();
-//! let unix = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+//! let now = Instant::EPOCH;
+//! let unix = Duration::from_secs(1_700_000_000);
 //! let alice_addr = "192.0.2.1:51820".parse().unwrap();
 //! let bob_addr = "192.0.2.2:51820".parse().unwrap();
 //!
-//! let mut alice = Interface::new(Zeroizing::new(rand::random()), now, unix);
-//! let mut bob = Interface::new(Zeroizing::new(rand::random()), now, unix);
+//! // Use fresh operating-system entropy for the seeds in production.
+//! let mut alice = Interface::new(Zeroizing::new([1; 32]), now, unix);
+//! let mut bob = Interface::new(Zeroizing::new([2; 32]), now, unix);
 //! let mut alice_to_bob = alice.new_tunnel(bob.static_public(), TunnelConfig::default(), now)?;
 //! let mut bob_to_alice = bob.new_tunnel(alice.static_public(), TunnelConfig::default(), now)?;
 //!
@@ -66,6 +69,13 @@
 //! # Ok::<(), sanstun::Error>(())
 //! ```
 //!
+//! # `no_std`
+//!
+//! sanstun is `#![no_std]` and depends only on `alloc`. It never reads a clock or an entropy
+//! source of its own: construct [`Instant`]s from your monotonic clock and seed
+//! [`Interface::new`] with operating-system entropy. The crate uses `alloc::sync::Arc`, so the
+//! target must support atomic pointers.
+//!
 //! # Caller responsibilities
 //!
 //! sanstun handles the protocol and cryptography. Your application is responsible for:
@@ -89,6 +99,11 @@
 //! - **Time:** use a monotonic clock for `now`. The Unix time passed to [`Interface::new`] must
 //!   not go backwards across restarts, or peers may reject handshake initiations as replays.
 
+extern crate alloc;
+
+#[cfg(test)]
+extern crate std;
+
 mod crypto;
 mod errors;
 mod handshake;
@@ -102,6 +117,7 @@ mod ring_buffer;
 mod rng;
 mod session;
 mod tai64n;
+mod time;
 mod timers;
 mod tunnel;
 
@@ -116,4 +132,5 @@ pub use message::{
 pub use session::{
     DecapsulateBatch, DecryptedBatch, EncapsulateBatch, PendingDecapsulate, PendingEncapsulate,
 };
+pub use time::Instant;
 pub use tunnel::{Committed, CommittedBatch, Event, Tunnel, TunnelConfig};

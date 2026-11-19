@@ -9,8 +9,8 @@ edition = "2024"
 rust-version = "1.89"
 
 [dependencies]
-tracing = "0.1.44"
-ring = "0.17"
+tracing = { version = "0.1.44", default-features = false }
+chacha20poly1305 = { version = "0.11.0", default-features = false }
 x25519-dalek = { version = "3.0.0", features = [
     "reusable_secrets",
     "static_secrets",
@@ -19,11 +19,12 @@ rand = { version = "0.10", default-features = false, features = ["std_rng"] }
 blake2 = "0.11.0"
 chacha20 = { version = "0.10", default-features = false, features = ["xchacha"] }
 hmac = "0.13"
-subtle = "2.6.1"
+subtle = { version = "2.6.1", default-features = false }
 zeroize = "1.5.6"
 
 [dev-dependencies]
 rand = "0.10"
+ring = "0.17"
 x25519-dalek = { version = "3.0.0", features = ["getrandom"] }
 etherparse = "0.21"
 criterion = { version = "0.8.2", features = ["html_reports"] }
