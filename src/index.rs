@@ -1,6 +1,7 @@
 use alloc::sync::{Arc, Weak};
 use core::fmt;
-use std::collections::HashMap;
+
+use crate::map::{HashMap, RandomState};
 
 use rand::rngs::StdRng;
 use rand::{CryptoRng, RngExt, SeedableRng};
@@ -66,7 +67,7 @@ impl TunnelIndices {
     pub(crate) fn new(rng: &mut impl CryptoRng) -> Self {
         TunnelIndices {
             rng: StdRng::from_rng(rng),
-            in_use: HashMap::new(),
+            in_use: HashMap::with_hasher(RandomState::new(rng)),
         }
     }
 

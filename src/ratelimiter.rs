@@ -1,7 +1,10 @@
 use core::net::{IpAddr, Ipv4Addr};
 use core::time::Duration;
-use std::collections::HashMap;
 use std::time::Instant;
+
+use rand::CryptoRng;
+
+use crate::map::{HashMap, RandomState};
 
 const DEFAULT_HANDSHAKE_LIMIT: u64 = 100;
 
@@ -34,12 +37,12 @@ pub(crate) struct RateLimiter {
 }
 
 impl RateLimiter {
-    pub(crate) fn new(now: Instant) -> Self {
+    pub(crate) fn new(now: Instant, rng: &mut impl CryptoRng) -> Self {
         Self {
             limit: DEFAULT_HANDSHAKE_LIMIT,
             count: 0,
             window_start: now,
-            buckets: HashMap::new(),
+            buckets: HashMap::with_hasher(RandomState::new(rng)),
             max_sources: DEFAULT_MAX_SOURCES,
             last_gc: now,
         }
@@ -145,11 +148,13 @@ impl Bucket {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng as _;
+    use rand::rngs::StdRng;
 
     #[test]
     fn full_table_refuses_new_sources_until_idle_ones_are_dropped() {
         let start = Instant::now();
-        let mut limiter = RateLimiter::new(start);
+        let mut limiter = RateLimiter::new(start, &mut StdRng::from_seed([0; 32]));
         for i in 0..DEFAULT_MAX_SOURCES as u32 {
             assert!(limiter.allow(Ipv4Addr::from_bits(i).into(), start));
         }
@@ -166,7 +171,7 @@ mod tests {
     #[test]
     fn ipv4_mapped_ipv6_sources_are_limited_per_ipv4_address() {
         let now = Instant::now();
-        let mut limiter = RateLimiter::new(now);
+        let mut limiter = RateLimiter::new(now, &mut StdRng::from_seed([0; 32]));
         let mapped = |ip: Ipv4Addr| IpAddr::V6(ip.to_ipv6_mapped());
 
         for _ in 0..PACKETS_BURSTABLE {

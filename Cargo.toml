@@ -10,7 +10,9 @@ rust-version = "1.89"
 
 [dependencies]
 tracing = "0.1.44"
+hashbrown = { version = "0.17", default-features = false }
 ring = "0.17"
+siphasher = { version = "1", default-features = false }
 x25519-dalek = { version = "3.0.0", features = [
     "reusable_secrets",
     "static_secrets",

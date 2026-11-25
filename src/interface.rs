@@ -1,6 +1,7 @@
 use crate::crypto::{b2s_hash, b2s_keyed_mac_16, b2s_keyed_mac_16_2, xaead_seal};
 use crate::handshake::{LABEL_COOKIE, LABEL_MAC1, parse_handshake_init};
 use crate::index::TunnelIndices;
+use crate::map::{HashMap, RandomState};
 use crate::message::{
     COOKIE_REPLY, COOKIE_REPLY_SZ, CookieReply, DATA, DATA_OVERHEAD_SZ, HANDSHAKE_INIT,
     HANDSHAKE_INIT_SZ, HANDSHAKE_RESP, HANDSHAKE_RESP_SZ, HandshakeResponse, Macs, ReceivedMessage,
@@ -13,7 +14,6 @@ use crate::{Datagram, Error, PublicKey, StaticSecret, Tunnel, TunnelConfig};
 use alloc::sync::{Arc, Weak};
 use core::net::{IpAddr, SocketAddr};
 use core::time::Duration;
-use std::collections::HashMap;
 use std::time::Instant;
 
 use crate::rng::ForwardSecureRng;
@@ -75,6 +75,8 @@ impl Interface {
         let mut cookie_secret = Zeroizing::new([0; 32]);
         rng.fill(&mut cookie_secret[..]);
         let indices = TunnelIndices::new(&mut rng);
+        let rate_limiter = RateLimiter::new(now, &mut rng);
+        let last_handshake_timestamps = HashMap::with_hasher(RandomState::new(&mut rng));
 
         Interface {
             static_private,
@@ -86,8 +88,8 @@ impl Interface {
             cookie_key: b2s_hash(LABEL_COOKIE, static_public.as_bytes()),
             stamper: TimeStamper::new(now, unix),
             indices,
-            rate_limiter: RateLimiter::new(now),
-            last_handshake_timestamps: HashMap::new(),
+            rate_limiter,
+            last_handshake_timestamps,
         }
     }
 

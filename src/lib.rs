@@ -97,6 +97,7 @@ mod handshake;
 mod index;
 mod interface;
 mod keys;
+mod map;
 mod message;
 mod ratelimiter;
 mod replay;
